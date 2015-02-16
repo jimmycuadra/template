@@ -1,4 +1,6 @@
 #[derive(Clone)]
+#[derive(Debug)]
+#[derive(PartialEq)]
 pub struct Item {
     typ: ItemType,
     pos: Position,
@@ -10,6 +12,8 @@ pub struct Lexer {
 }
 
 #[derive(Clone)]
+#[derive(Debug)]
+#[derive(PartialEq)]
 pub enum ItemType {
     ItemError,
     ItemBool,
@@ -65,15 +69,21 @@ mod tests {
         items
     }
 
-    fn equal(actual: Vec<Item>, expected: Vec<Item>) -> bool {
-        false
+    macro_rules! test_cases {
+        ($([$name:ident, $input:expr, $items:expr]),+) => (
+            $(
+                #[test]
+                fn $name() {
+                    let input = $input;
+                    let expected_items = $items;
+                    let actual_items = lex(input, "", "");
+                    assert_eq!(expected_items, actual_items);
+                }
+            )+
+        );
     }
 
-    #[test]
-    fn empty() {
-        let input = "";
-        let expected_items = vec![T_EOF];
-        let actual_items = lex(input, "", "");
-        assert!(equal(actual_items, expected_items))
-    }
+    test_cases!(
+        [empty, "", vec![T_EOF]]
+    );
 }
