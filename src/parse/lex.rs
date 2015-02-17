@@ -59,12 +59,9 @@ pub enum ItemType {
     With
 }
 
-enum NextChar {
-    Char(char),
-    EOF
-}
-
 struct StateFn(fn(&mut Lexer) -> Option<StateFn>);
+
+type NextChar = Option<char>;
 
 const LEFT_COMMENT: &'static str = "/*";
 const RIGHT_COMMENT: &'static str = "*/";
@@ -89,12 +86,7 @@ impl Lexer {
     }
 
     pub fn accept(&mut self, valid_chars: &'static str) -> bool {
-        let next_char = match self.next() {
-            NextChar::Char(c) => c,
-            NextChar::EOF => panic!("this shouldn't happen...")
-        };
-
-        if valid_chars.contains_char(next_char) {
+        if valid_chars.contains_char(self.next().unwrap()) {
             return true
         }
 
@@ -105,14 +97,8 @@ impl Lexer {
 
     pub fn accept_run(&mut self, valid_chars: &'static str) {
         loop {
-            let next_char = match self.next() {
-                NextChar::Char(c) => c,
-                NextChar::EOF => panic!("this shouldn't happen...")
-            };
-
-            match valid_chars.contains_char(next_char) {
-                true => {},
-                false => break
+            if !valid_chars.contains_char(self.next().unwrap()) {
+                break;
             }
         }
 
@@ -141,14 +127,14 @@ impl Lexer {
     pub fn next(&mut self) -> NextChar {
         if self.pos >= self.input.len() {
             self.width = 0;
-            return NextChar::EOF;
+            return None;
         }
 
         let next_char = self.input.char_at(self.pos);
         self.width = next_char.len_utf8();
         self.pos += self.width;
 
-        NextChar::Char(next_char)
+        Some(next_char)
     }
 
     pub fn next_item(&mut self) -> Item {
@@ -196,15 +182,10 @@ impl Lexer {
 
         self.accept("i");
 
-        match self.peek() {
-            NextChar::Char(c) => {
-                if c.is_alphanumeric() {
-                    self.next();
+        if self.peek().unwrap().is_alphanumeric() {
+            self.next();
 
-                    return false;
-                }
-            },
-            NextChar::EOF => panic!("this shouldn't happen...")
+            return false;
         }
 
         true
@@ -244,7 +225,7 @@ fn lex_inside_action(lexer: &mut Lexer) -> Option<StateFn> {
     }
 
     match lexer.next() {
-        NextChar::Char(c) => {
+        Some(c) => {
             if is_space(c) {
                 return Some(StateFn(lex_space));
             } else if c == '+' || c == '-' || ('0' <= c && c <= '9') {
@@ -271,7 +252,7 @@ fn lex_inside_action(lexer: &mut Lexer) -> Option<StateFn> {
                 return Some(StateFn(lex_inside_action));
             }
         },
-        NextChar::EOF => panic!("unclosed action")
+        None => panic!("unclosed action")
     }
 
     Some(StateFn(lex_inside_action))
@@ -307,13 +288,8 @@ fn lex_right_delim(lexer: &mut Lexer) -> Option<StateFn> {
 
 fn lex_space(lexer: &mut Lexer) -> Option<StateFn> {
     loop {
-        match lexer.peek() {
-            NextChar::Char(c) => {
-                if !is_space(c) {
-                    break;
-                }
-            },
-            NextChar::EOF => { panic!("this shouldn't happen...") }
+        if !is_space(lexer.peek().unwrap()) {
+            break;
         }
     }
 
@@ -333,8 +309,8 @@ fn lex_text(lexer: &mut Lexer) -> Option<StateFn> {
         }
 
         match lexer.next() {
-            NextChar::EOF => break,
-            _ => {},
+            Some(_) => {},
+            None => break,
         }
     }
 
