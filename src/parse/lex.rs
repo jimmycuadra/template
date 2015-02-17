@@ -20,7 +20,7 @@ pub struct Lexer {
     last_pos: usize,
     items_tx: mpsc::Sender<Item>,
     items_rx: mpsc::Receiver<Item>,
-    paren_depth: usize
+    paren_depth: isize
 }
 
 #[derive(Clone)]
@@ -88,6 +88,37 @@ impl Lexer {
         }
     }
 
+    pub fn accept(&mut self, valid_chars: &'static str) -> bool {
+        let next_char = match self.next() {
+            NextChar::Char(c) => c,
+            NextChar::EOF => panic!("this shouldn't happen...")
+        };
+
+        if valid_chars.contains_char(next_char) {
+            return true
+        }
+
+        self.backup();
+
+        false
+    }
+
+    pub fn accept_run(&mut self, valid_chars: &'static str) {
+        loop {
+            let next_char = match self.next() {
+                NextChar::Char(c) => c,
+                NextChar::EOF => panic!("this shouldn't happen...")
+            };
+
+            match valid_chars.contains_char(next_char) {
+                true => {},
+                false => break
+            }
+        }
+
+        self.backup();
+    }
+
     pub fn backup(&mut self) {
         self.pos -= self.width;
     }
@@ -142,6 +173,42 @@ impl Lexer {
             }
         }
     }
+
+    pub fn scan_number(&mut self) -> bool {
+        self.accept("+-");
+
+        let digits = if self.accept("0") && self.accept("xX") {
+            "0123456789abcdefABCDEF"
+        } else {
+            "0123456789"
+        };
+
+        self.accept_run(digits);
+
+        if self.accept(".") {
+            self.accept_run(digits);
+        }
+
+        if self.accept("eE") {
+            self.accept("+-");
+            self.accept_run("0123456789");
+        }
+
+        self.accept("i");
+
+        match self.peek() {
+            NextChar::Char(c) => {
+                if c.is_alphanumeric() {
+                    self.next();
+
+                    return false;
+                }
+            },
+            NextChar::EOF => panic!("this shouldn't happen...")
+        }
+
+        true
+    }
 }
 
 fn is_space(c: char) -> bool {
@@ -180,6 +247,24 @@ fn lex_inside_action(lexer: &mut Lexer) -> Option<StateFn> {
         NextChar::Char(c) => {
             if is_space(c) {
                 return Some(StateFn(lex_space));
+            } else if c == '+' || c == '-' || ('0' <= c && c <= '9') {
+                lexer.backup();
+
+                return Some(StateFn(lex_number));
+            } else if c == '(' {
+                lexer.emit(ItemType::LeftParen);
+                lexer.paren_depth += 1;
+
+                return Some(StateFn(lex_inside_action));
+            } else if c == ')' {
+                lexer.emit(ItemType::RightParen);
+                lexer.paren_depth -= 1;
+
+                if lexer.paren_depth < 0 {
+                    panic!("unexpected right paren");
+                }
+
+                return Some(StateFn(lex_inside_action));
             } else {
                 lexer.emit(ItemType::Char);
 
@@ -201,6 +286,16 @@ fn lex_left_delim(lexer: &mut Lexer) -> Option<StateFn> {
 
     lexer.emit(ItemType::LeftDelim);
     lexer.paren_depth = 0;
+    Some(StateFn(lex_inside_action))
+}
+
+fn lex_number(lexer: &mut Lexer) -> Option<StateFn> {
+    if !lexer.scan_number() {
+        panic!("bad number syntax");
+    }
+
+    lexer.emit(ItemType::Number);
+
     Some(StateFn(lex_inside_action))
 }
 
@@ -332,6 +427,20 @@ mod tests {
                 [Space, 5, " "],
                 [RightDelim, 6, "}}"],
                 [EOF, 8, ""]
+            ]
+        ],
+        [
+            parens,
+            "{{((3))}}",
+            [
+                [LeftDelim, 0, "{{"],
+                [LeftParen, 2, "("],
+                [LeftParen, 3, "("],
+                [Number, 4, "3"],
+                [RightParen, 5, ")"],
+                [RightParen, 6, ")"],
+                [RightDelim, 7, "}}"],
+                [EOF, 9, ""]
             ]
         ]
     );
