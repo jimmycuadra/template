@@ -1,1 +1,3 @@
+#![feature(collections)]
+
 mod parse;
