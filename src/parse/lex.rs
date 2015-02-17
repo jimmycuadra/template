@@ -66,6 +66,9 @@ enum NextChar {
 
 struct StateFn(fn(&mut Lexer) -> Option<StateFn>);
 
+const LEFT_COMMENT: &'static str = "/*";
+const RIGHT_COMMENT: &'static str = "*/";
+
 impl Lexer {
     pub fn new(input: &'static str, left: &'static str, right: &'static str) -> Lexer {
         let (tx, rx) = mpsc::channel();
@@ -93,6 +96,10 @@ impl Lexer {
                 val: &self.input[self.start..self.pos]
             }
         );
+        self.start = self.pos;
+    }
+
+    pub fn ignore(&mut self) {
         self.start = self.pos;
     }
 
@@ -126,6 +133,41 @@ impl Lexer {
     }
 }
 
+fn lex_comment(lexer: &mut Lexer) -> Option<StateFn> {
+    lexer.pos += LEFT_COMMENT.len();
+
+    match lexer.input[lexer.pos..].find_str(RIGHT_COMMENT) {
+        Some(i) => {
+            lexer.pos += i + RIGHT_COMMENT.len();
+
+            if !lexer.input[lexer.pos..].starts_with(lexer.right_delim) {
+                panic!("comment must be followed by closing delimiter");
+            }
+
+            lexer.pos += lexer.right_delim.len();
+            lexer.ignore();
+            return Some(StateFn(lex_text));
+        },
+        None => panic!("unclosed comment")
+    }
+}
+
+fn lex_inside_action(lexer: &mut Lexer) -> Option<StateFn> {
+    None
+}
+
+fn lex_left_delim(lexer: &mut Lexer) -> Option<StateFn> {
+    lexer.pos += lexer.left_delim.len();
+
+    if lexer.input[lexer.pos..].starts_with(LEFT_COMMENT) {
+        return Some(StateFn(lex_comment));
+    }
+
+    lexer.emit(ItemType::LeftDelim);
+    lexer.paren_depth = 0;
+    return Some(StateFn(lex_inside_action));
+}
+
 fn lex_text(lexer: &mut Lexer) -> Option<StateFn> {
     loop {
         if lexer.input[lexer.pos..].starts_with(lexer.left_delim) {
@@ -148,10 +190,6 @@ fn lex_text(lexer: &mut Lexer) -> Option<StateFn> {
 
     lexer.emit(ItemType::EOF);
 
-    None
-}
-
-fn lex_left_delim(lexer: &mut Lexer) -> Option<StateFn> {
     None
 }
 
@@ -213,6 +251,15 @@ mod tests {
             vec![
                 Item { typ: ItemType::Text, pos: 0, val: "now is the time" },
                 Item { typ: ItemType::EOF, pos: 15, val: "" }
+            ]
+        ],
+        [
+            text_with_comment,
+            "hello-{{/* this is a comment */}}-world",
+            vec![
+                Item { typ: ItemType::Text, pos: 0, val: "hello-" },
+                Item { typ: ItemType::Text, pos: 33, val: "-world" },
+                Item { typ: ItemType::EOF, pos: 39, val: "" }
             ]
         ]
     );
