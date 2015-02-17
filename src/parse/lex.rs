@@ -216,12 +216,12 @@ mod tests {
     }
 
     macro_rules! test_cases {
-        ($([$name:ident, $input:expr, $items:expr]),+) => (
+        ($([$name:ident, $input:expr, [$([$ty:ident, $pos:expr, $val:expr]),+]]),+) => (
             $(
                 #[test]
                 fn $name() {
                     let input = $input;
-                    let expected_items = $items;
+                    let expected_items = vec![$(Item { typ: ItemType::$ty, pos: $pos, val: $val }),+];
                     let actual_items = lex(input, "", "");
                     assert_eq!(expected_items, actual_items);
                 }
@@ -233,33 +233,33 @@ mod tests {
         [
             empty,
             "",
-            vec![
-                Item { typ: ItemType::EOF, pos: 0, val: "" }
+            [
+                [EOF, 0, ""]
             ]
         ],
         [
             spaces,
             " \t\n",
-            vec![
-                Item { typ: ItemType::Text, pos: 0, val: " \t\n" },
-                Item { typ: ItemType::EOF, pos: 3, val: "" }
+            [
+                [Text, 0, " \t\n"],
+                [EOF, 3, ""]
             ]
         ],
         [
             text,
             "now is the time",
-            vec![
-                Item { typ: ItemType::Text, pos: 0, val: "now is the time" },
-                Item { typ: ItemType::EOF, pos: 15, val: "" }
+            [
+                [Text, 0, "now is the time"],
+                [EOF, 15, ""]
             ]
         ],
         [
             text_with_comment,
             "hello-{{/* this is a comment */}}-world",
-            vec![
-                Item { typ: ItemType::Text, pos: 0, val: "hello-" },
-                Item { typ: ItemType::Text, pos: 33, val: "-world" },
-                Item { typ: ItemType::EOF, pos: 39, val: "" }
+            [
+                [Text, 0, "hello-"],
+                [Text, 33, "-world"],
+                [EOF, 39, ""]
             ]
         ]
     );
