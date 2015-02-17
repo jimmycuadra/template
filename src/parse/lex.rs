@@ -88,6 +88,10 @@ impl Lexer {
         }
     }
 
+    pub fn backup(&mut self) {
+        self.pos -= self.width;
+    }
+
     pub fn emit(&mut self, item_type: ItemType) {
         self.items_tx.send(
             Item {
@@ -112,13 +116,20 @@ impl Lexer {
         let next_char = self.input.char_at(self.pos);
         self.width = next_char.len_utf8();
         self.pos += self.width;
-        return NextChar::Char(next_char);
+
+        NextChar::Char(next_char)
     }
 
     pub fn next_item(&mut self) -> Item {
         let item = self.items_rx.recv().unwrap();
         self.last_pos = item.pos;
         item
+    }
+
+    pub fn peek(&mut self) -> NextChar {
+        let next_char = self.next();
+        self.backup();
+        next_char
     }
 
     pub fn run(&mut self) {
@@ -131,6 +142,10 @@ impl Lexer {
             }
         }
     }
+}
+
+fn is_space(c: char) -> bool {
+    c == ' ' || c == '\t'
 }
 
 fn lex_comment(lexer: &mut Lexer) -> Option<StateFn> {
@@ -153,7 +168,28 @@ fn lex_comment(lexer: &mut Lexer) -> Option<StateFn> {
 }
 
 fn lex_inside_action(lexer: &mut Lexer) -> Option<StateFn> {
-    None
+    if lexer.input[lexer.pos..].starts_with(lexer.right_delim) {
+        if lexer.paren_depth == 0 {
+            return Some(StateFn(lex_right_delim));
+        }
+
+        panic!("unclosed left paren");
+    }
+
+    match lexer.next() {
+        NextChar::Char(c) => {
+            if is_space(c) {
+                return Some(StateFn(lex_space));
+            } else {
+                lexer.emit(ItemType::Char);
+
+                return Some(StateFn(lex_inside_action));
+            }
+        },
+        NextChar::EOF => panic!("unclosed action")
+    }
+
+    Some(StateFn(lex_inside_action))
 }
 
 fn lex_left_delim(lexer: &mut Lexer) -> Option<StateFn> {
@@ -165,7 +201,30 @@ fn lex_left_delim(lexer: &mut Lexer) -> Option<StateFn> {
 
     lexer.emit(ItemType::LeftDelim);
     lexer.paren_depth = 0;
-    return Some(StateFn(lex_inside_action));
+    Some(StateFn(lex_inside_action))
+}
+
+fn lex_right_delim(lexer: &mut Lexer) -> Option<StateFn> {
+    lexer.pos += lexer.right_delim.len();
+    lexer.emit(ItemType::RightDelim);
+    Some(StateFn(lex_text))
+}
+
+fn lex_space(lexer: &mut Lexer) -> Option<StateFn> {
+    loop {
+        match lexer.peek() {
+            NextChar::Char(c) => {
+                if !is_space(c) {
+                    break;
+                }
+            },
+            NextChar::EOF => { panic!("this shouldn't happen...") }
+        }
+    }
+
+    lexer.emit(ItemType::Space);
+
+    Some(StateFn(lex_inside_action))
 }
 
 fn lex_text(lexer: &mut Lexer) -> Option<StateFn> {
@@ -260,6 +319,19 @@ mod tests {
                 [Text, 0, "hello-"],
                 [Text, 33, "-world"],
                 [EOF, 39, ""]
+            ]
+        ],
+        [
+            punctuation,
+            "{{,@% }}",
+            [
+                [LeftDelim, 0, "{{"],
+                [Char, 2, ","],
+                [Char, 3, "@"],
+                [Char, 4, "%"],
+                [Space, 5, " "],
+                [RightDelim, 6, "}}"],
+                [EOF, 8, ""]
             ]
         ]
     );
