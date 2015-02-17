@@ -206,6 +206,14 @@ mod tests {
                 Item { typ: ItemType::Text, pos: 0, val: " \t\n" },
                 Item { typ: ItemType::EOF, pos: 3, val: "" }
             ]
+        ],
+        [
+            text,
+            "now is the time",
+            vec![
+                Item { typ: ItemType::Text, pos: 0, val: "now is the time" },
+                Item { typ: ItemType::EOF, pos: 15, val: "" }
+            ]
         ]
     );
 }
