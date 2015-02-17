@@ -27,36 +27,41 @@ pub struct Lexer {
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub enum ItemType {
-    ItemError,
-    ItemBool,
-    ItemChar,
-    ItemCharConstant,
-    ItemComplex,
-    ItemColonEquals,
-    ItemEOF,
-    ItemField,
-    ItemIdentifier,
-    ItemLeftDelim,
-    ItemLeftParen,
-    ItemNumber,
-    ItemPipe,
-    ItemRawString,
-    ItemRightDelim,
-    ItemRightParen,
-    ItemSpace,
-    ItemString,
-    ItemText,
-    ItemVariable,
-    ItemKeyword,
-    ItemDot,
-    ItemDefine,
-    ItemElse,
-    ItemEnd,
-    ItemIf,
-    ItemNil,
-    ItemRange,
-    ItemTemplate,
-    ItemWith
+    Error,
+    Bool,
+    Char,
+    CharConstant,
+    Complex,
+    ColonEquals,
+    EOF,
+    Field,
+    Identifier,
+    LeftDelim,
+    LeftParen,
+    Number,
+    Pipe,
+    RawString,
+    RightDelim,
+    RightParen,
+    Space,
+    String,
+    Text,
+    Variable,
+    Keyword,
+    Dot,
+    Define,
+    Else,
+    End,
+    If,
+    Nil,
+    Range,
+    Template,
+    With
+}
+
+enum NextChar {
+    Char(char),
+    EOF
 }
 
 struct StateFn(fn(&mut Lexer) -> Option<StateFn>);
@@ -85,10 +90,22 @@ impl Lexer {
             Item {
                 typ: item_type,
                 pos: self.start,
-                val: &self.input.slice_chars(self.start, self.pos)
+                val: &self.input[self.start..self.pos]
             }
         );
         self.start = self.pos;
+    }
+
+    pub fn next(&mut self) -> NextChar {
+        if self.pos >= self.input.len() {
+            self.width = 0;
+            return NextChar::EOF;
+        }
+
+        let next_char = self.input.char_at(self.pos);
+        self.width = next_char.len_utf8();
+        self.pos += self.width;
+        return NextChar::Char(next_char);
     }
 
     pub fn next_item(&mut self) -> Item {
@@ -110,19 +127,37 @@ impl Lexer {
 }
 
 fn lex_text(lexer: &mut Lexer) -> Option<StateFn> {
-    lexer.emit(ItemType::ItemEOF);
+    loop {
+        if lexer.input[lexer.pos..].starts_with(lexer.left_delim) {
+            if lexer.pos > lexer.start {
+                lexer.emit(ItemType::Text);
+            }
+
+            return Some(StateFn(lex_left_delim));
+        }
+
+        match lexer.next() {
+            NextChar::EOF => break,
+            _ => {},
+        }
+    }
+
+    if lexer.pos > lexer.start {
+        lexer.emit(ItemType::Text);
+    }
+
+    lexer.emit(ItemType::EOF);
+
+    None
+}
+
+fn lex_left_delim(lexer: &mut Lexer) -> Option<StateFn> {
     None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const T_EOF: Item = Item{
-            typ: ItemType::ItemEOF,
-            pos: 0,
-            val: ""
-    };
 
     fn lex(input: &'static str, left: &'static str, right: &'static str) -> Vec<Item> {
         let mut items: Vec<Item> = vec![];
@@ -134,7 +169,7 @@ mod tests {
             items.push(item.clone());
 
             match item.typ {
-                ItemType::ItemEOF | ItemType::ItemError => break,
+                ItemType::EOF | ItemType::Error => break,
                 _ => { }
             }
         }
@@ -157,7 +192,20 @@ mod tests {
     }
 
     test_cases!(
-        [empty, "", vec![T_EOF]],
-        [spaces, " \t\n", vec![Item { typ: ItemType::ItemText, pos: 0, val: " \t\n" }, T_EOF]]
+        [
+            empty,
+            "",
+            vec![
+                Item { typ: ItemType::EOF, pos: 0, val: "" }
+            ]
+        ],
+        [
+            spaces,
+            " \t\n",
+            vec![
+                Item { typ: ItemType::Text, pos: 0, val: " \t\n" },
+                Item { typ: ItemType::EOF, pos: 3, val: "" }
+            ]
+        ]
     );
 }
