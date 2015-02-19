@@ -26,6 +26,21 @@ pub struct Lexer {
 #[derive(Clone)]
 #[derive(Debug)]
 #[derive(PartialEq)]
+enum ItemTypeKeyword {
+    Dot,
+    Define,
+    Else,
+    End,
+    If,
+    Nil,
+    Range,
+    Template,
+    With
+}
+
+#[derive(Clone)]
+#[derive(Debug)]
+#[derive(PartialEq)]
 pub enum ItemType {
     Error,
     Bool,
@@ -47,7 +62,7 @@ pub enum ItemType {
     String,
     Text,
     Variable,
-    Keyword,
+    Keyword(ItemTypeKeyword),
     Dot,
     Define,
     Else,
@@ -103,6 +118,10 @@ impl Lexer {
         }
 
         self.backup();
+    }
+
+    pub fn at_terminator(&mut self) -> bool {
+        true
     }
 
     pub fn backup(&mut self) {
@@ -196,6 +215,21 @@ fn is_space(c: char) -> bool {
     c == ' ' || c == '\t'
 }
 
+fn item_type_keyword_from_string(string: &str) -> Option<ItemTypeKeyword> {
+    match string {
+        "." => Some(ItemTypeKeyword::Dot),
+        "define" => Some(ItemTypeKeyword::Define),
+        "else" => Some(ItemTypeKeyword::Else),
+        "end" => Some(ItemTypeKeyword::End),
+        "if" => Some(ItemTypeKeyword::If),
+        "range" => Some(ItemTypeKeyword::Range),
+        "nil" => Some(ItemTypeKeyword::Nil),
+        "template" => Some(ItemTypeKeyword::Template),
+        "with" => Some(ItemTypeKeyword::With),
+        _ => None
+    }
+}
+
 fn lex_comment(lexer: &mut Lexer) -> Option<StateFn> {
     lexer.pos += LEFT_COMMENT.len();
 
@@ -215,6 +249,39 @@ fn lex_comment(lexer: &mut Lexer) -> Option<StateFn> {
     }
 }
 
+fn lex_identifier(lexer: &mut Lexer) -> Option<StateFn> {
+    loop {
+        let c = lexer.next().unwrap();
+
+        if !c.is_alphanumeric() {
+            break;
+        }
+    }
+
+    lexer.backup();
+
+    let word = &lexer.input[lexer.start..lexer.pos];
+
+    if !lexer.at_terminator() {
+        panic!("bad character");
+    }
+
+    match item_type_keyword_from_string(word) {
+        Some(keyword) => { lexer.emit(ItemType::Keyword(keyword)) },
+        None => {
+            if word.char_at(0) == '.' {
+                lexer.emit(ItemType::Field);
+            } else if word == "true" || word == "false" {
+                lexer.emit(ItemType::Bool);
+            } else {
+                lexer.emit(ItemType::Identifier);
+            }
+        }
+    }
+
+    Some(StateFn(lex_inside_action))
+}
+
 fn lex_inside_action(lexer: &mut Lexer) -> Option<StateFn> {
     if lexer.input[lexer.pos..].starts_with(lexer.right_delim) {
         if lexer.paren_depth == 0 {
@@ -232,6 +299,9 @@ fn lex_inside_action(lexer: &mut Lexer) -> Option<StateFn> {
                 lexer.backup();
 
                 return Some(StateFn(lex_number));
+            } else if c.is_alphanumeric() {
+                lexer.backup();
+                return Some(StateFn(lex_identifier));
             } else if c == '(' {
                 lexer.emit(ItemType::LeftParen);
                 lexer.paren_depth += 1;
@@ -387,6 +457,12 @@ mod tests {
             [RightDelim, 7, "}}"],
             [EOF, 9, ""]
         ]],
-        [empty_action, "{{}}", [[LeftDelim, 0, "{{"], [RightDelim, 2, "}}"], [EOF, 4, ""]]]
+        [empty_action, "{{}}", [[LeftDelim, 0, "{{"], [RightDelim, 2, "}}"], [EOF, 4, ""]]],
+        [for_, "{{for}}", [
+            [LeftDelim, 0, "{{"],
+            [Identifier, 2, "for"],
+            [RightDelim, 5, "}}"],
+            [EOF, 7, ""]
+        ]]
     );
 }
