@@ -295,6 +295,8 @@ fn lex_inside_action(lexer: &mut Lexer) -> Option<StateFn> {
         Some(c) => {
             if is_space(c) {
                 return Some(StateFn(lex_space));
+            } else if c == '"' {
+                return Some(StateFn(lex_quote));
             } else if c == '+' || c == '-' || ('0' <= c && c <= '9') {
                 lexer.backup();
 
@@ -347,6 +349,24 @@ fn lex_number(lexer: &mut Lexer) -> Option<StateFn> {
 
     lexer.emit(ItemType::Number);
 
+    Some(StateFn(lex_inside_action))
+}
+
+fn lex_quote(lexer: &mut Lexer) -> Option<StateFn> {
+    loop {
+        match lexer.next().expect("unterminated quoted string") {
+            '\\' => {
+                if lexer.next().expect("unterminated quoted string") == '\n' {
+                    panic!("unterminated quoted string");
+                }
+            },
+            '\n' => panic!("unterminated quoted string"),
+            '"' => break,
+            _ => {}
+        }
+    }
+
+    lexer.emit(ItemType::String);
     Some(StateFn(lex_inside_action))
 }
 
@@ -463,6 +483,12 @@ mod tests {
             [Identifier, 2, "for"],
             [RightDelim, 5, "}}"],
             [EOF, 7, ""]
+        ]],
+        [quote, r#"{{"abc \n\t\" "}}"#, [
+            [LeftDelim, 0, "{{"],
+            [String, 2, r#""abc \n\t\" ""#],
+            [RightDelim, 15, "}}"],
+            [EOF, 17, ""]
         ]]
     );
 }
