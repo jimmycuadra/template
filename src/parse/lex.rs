@@ -297,6 +297,8 @@ fn lex_inside_action(lexer: &mut Lexer) -> Option<StateFn> {
                 return Some(StateFn(lex_space));
             } else if c == '"' {
                 return Some(StateFn(lex_quote));
+            } else if c == '`' {
+                return Some(StateFn(lex_raw_quote));
             } else if c == '+' || c == '-' || ('0' <= c && c <= '9') {
                 lexer.backup();
 
@@ -367,6 +369,19 @@ fn lex_quote(lexer: &mut Lexer) -> Option<StateFn> {
     }
 
     lexer.emit(ItemType::String);
+    Some(StateFn(lex_inside_action))
+}
+
+fn lex_raw_quote(lexer: &mut Lexer) -> Option<StateFn> {
+    loop {
+        match lexer.next().expect("unterminated raw quoted string") {
+            '\n' => panic!("unterminated raw quoted string"),
+            '`' => break,
+            _ => {}
+        }
+    }
+
+    lexer.emit(ItemType::RawString);
     Some(StateFn(lex_inside_action))
 }
 
@@ -487,6 +502,12 @@ mod tests {
         [quote, r#"{{"abc \n\t\" "}}"#, [
             [LeftDelim, 0, "{{"],
             [String, 2, r#""abc \n\t\" ""#],
+            [RightDelim, 15, "}}"],
+            [EOF, 17, ""]
+        ]],
+        [raw_quote, r#"{{`abc \n\t\" `}}"#, [
+            [LeftDelim, 0, "{{"],
+            [RawString, 2, r#"`abc \n\t\" `"#],
             [RightDelim, 15, "}}"],
             [EOF, 17, ""]
         ]]
