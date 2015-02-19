@@ -386,6 +386,7 @@ mod tests {
             [RightParen, 6, ")"],
             [RightDelim, 7, "}}"],
             [EOF, 9, ""]
-        ]]
+        ]],
+        [empty_action, "{{}}", [[LeftDelim, 0, "{{"], [RightDelim, 2, "}}"], [EOF, 4, ""]]]
     );
 }
