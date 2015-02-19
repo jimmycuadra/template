@@ -360,64 +360,32 @@ mod tests {
     }
 
     test_cases!(
-        [
-            empty,
-            "",
-            [
-                [EOF, 0, ""]
-            ]
-        ],
-        [
-            spaces,
-            " \t\n",
-            [
-                [Text, 0, " \t\n"],
-                [EOF, 3, ""]
-            ]
-        ],
-        [
-            text,
-            "now is the time",
-            [
-                [Text, 0, "now is the time"],
-                [EOF, 15, ""]
-            ]
-        ],
-        [
-            text_with_comment,
-            "hello-{{/* this is a comment */}}-world",
-            [
-                [Text, 0, "hello-"],
-                [Text, 33, "-world"],
-                [EOF, 39, ""]
-            ]
-        ],
-        [
-            punctuation,
-            "{{,@% }}",
-            [
-                [LeftDelim, 0, "{{"],
-                [Char, 2, ","],
-                [Char, 3, "@"],
-                [Char, 4, "%"],
-                [Space, 5, " "],
-                [RightDelim, 6, "}}"],
-                [EOF, 8, ""]
-            ]
-        ],
-        [
-            parens,
-            "{{((3))}}",
-            [
-                [LeftDelim, 0, "{{"],
-                [LeftParen, 2, "("],
-                [LeftParen, 3, "("],
-                [Number, 4, "3"],
-                [RightParen, 5, ")"],
-                [RightParen, 6, ")"],
-                [RightDelim, 7, "}}"],
-                [EOF, 9, ""]
-            ]
-        ]
+        [empty, "", [[EOF, 0, ""]]],
+        [spaces, " \t\n", [[Text, 0, " \t\n"], [EOF, 3, ""]]],
+        [text, "now is the time", [[Text, 0, "now is the time"], [EOF, 15, ""]]],
+        [text_with_comment, "hello-{{/* this is a comment */}}-world", [
+            [Text, 0, "hello-"],
+            [Text, 33, "-world"],
+            [EOF, 39, ""]
+        ]],
+        [punctuation, "{{,@% }}", [
+            [LeftDelim, 0, "{{"],
+            [Char, 2, ","],
+            [Char, 3, "@"],
+            [Char, 4, "%"],
+            [Space, 5, " "],
+            [RightDelim, 6, "}}"],
+            [EOF, 8, ""]
+        ]],
+        [parens, "{{((3))}}", [
+            [LeftDelim, 0, "{{"],
+            [LeftParen, 2, "("],
+            [LeftParen, 3, "("],
+            [Number, 4, "3"],
+            [RightParen, 5, ")"],
+            [RightParen, 6, ")"],
+            [RightDelim, 7, "}}"],
+            [EOF, 9, ""]
+        ]]
     );
 }
